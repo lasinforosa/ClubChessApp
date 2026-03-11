@@ -1,0 +1,5 @@
+DJANGO_DEBUG=False
+DJANGO_SECRET_KEY=UnaClauSecretaMoltLlargaIGeneradaAleatoriament
+DATABASE_URL=postgres://partidesuser:Tigran_5254@localhost/partidesclub
+ALLOWED_HOSTS=partides.nuvoldescacs.net,www.partides.nuvoldescacs.net
+CSRF_TRUSTED_ORIGINS=https://partides.nuvoldescacs.net

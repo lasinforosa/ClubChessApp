@@ -1,0 +1,31 @@
+{% extends "games/base.html" %}
+
+{% block content %}
+    <h2>Importar Partides des d'un Fitxer</h2>
+    <p>Pots pujar un fitxer <code>.pgn</code> que contingui diverses partides (exportat de Lichess, Chess.com, etc.).</p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div style="padding: 10px; background: {% if message.tags == 'success' %}#d4edda{% else %}#f8d7da{% endif %}; color: #333; margin-bottom: 20px;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <div style="margin-bottom: 15px;">
+            {{ form.pgn_file.label_tag }}<br>
+            {{ form.pgn_file }}
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            {{ form.visibilitat.label_tag }}<br>
+            {{ form.visibilitat }}
+            <small style="color: #666;">Aquesta visibilitat s'aplicarà a totes les partides del fitxer.</small>
+        </div>
+
+        <button type="submit" class="btn-nav">Importar</button>
+    </form>
+{% endblock %}

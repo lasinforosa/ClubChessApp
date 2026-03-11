@@ -1,0 +1,38 @@
+# FITXERS DE PYTHON
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ENTORN VIRTUAL (Molt important!)
+venv/
+.venv/
+env/
+ENV/
+
+# DJANGO
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media/           # Fitxers pujats pels usuaris
+/staticfiles/     # Fitxers estàtics recopilats (collectstatic)
+
+# VARIABLES D'ENTORN I SECRETS
+.env
+*.pem
+
+# IDE (Editors com VS Code, PyCharm)
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# SISTEMA OPERATIU
+.DS_Store        # macOS
+Thumbs.db        # Windows
+
+# FITXERS TEMPORALS
+*.tmp
+*.bak

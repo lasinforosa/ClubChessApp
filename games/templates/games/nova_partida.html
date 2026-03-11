@@ -1,0 +1,262 @@
+{% extends "games/base.html" %}
+{% load static %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'css/chessboard-1.0.0.min.css' %}">
+    <style>
+        .editor-container { display: flex; gap: 30px; margin-top: 20px; flex-wrap: wrap; }
+        .board-col { flex: 0 0 400px; }
+        .form-col { flex: 1; min-width: 300px; }
+        #move-list-editor { width: 100%; height: 150px; font-family: monospace; margin-bottom: 20px; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; overflow-y: auto; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
+        .form-row { display: flex; gap: 15px; }
+        .form-row .form-group { flex: 1; }
+        
+        /* Estil per al mode edició */
+        .edit-mode-warning { background: #fff3cd; color: #856404; padding: 10px; margin-bottom: 20px; border: 1px solid #ffeeba; border-radius: 5px; }
+        .btn-truncate { background: #dc3545; color: white; padding: 8px 15px; border: none; cursor: pointer; border-radius: 3px; margin-left: 10px; }
+        .btn-truncate:hover { background: #c82333; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <!-- Títol dinàmic -->
+    <h2>{% if partida %}Editar Partida{% else %}Nova Partida (Entrada Manual){% endif %}</h2>
+    
+    {% if partida %}
+        <div class="edit-mode-warning">
+            Estàs editant una partida existent. Si us plau, ves amb compte amb les modificacions.
+        </div>
+    {% endif %}
+
+    <form method="post" id="gameForm">
+        {% csrf_token %}
+        <input type="hidden" name="pgn_text" id="id_pgn_text">
+
+        <div class="editor-container">
+            <!-- TAULER -->
+            <div class="board-col">
+                <div id="board" style="width: 400px"></div>
+                
+                <div style="margin-top: 10px;">
+                    <button type="button" id="btnStart" class="btn-nav">Inici</button>
+                    <button type="button" id="btnPrev" class="btn-nav">< Anterior</button>
+                    <button type="button" id="btnNext" class="btn-nav">Següent ></button>
+                    <button type="button" id="btnEnd" class="btn-nav">Final</button>
+                </div>
+                <h3>Moviments:</h3>
+                <div id="move-list-editor"></div>
+            </div>
+
+            <!-- FORMULARI DADES -->
+            <div class="form-col">
+                <h3>Dades</h3>
+                
+                <div class="form-group">
+                    <label for="blanc">Blanques:</label>
+                    <input type="text" id="blanc" name="blanc" value="{{ partida.blanc|default:'' }}">
+                </div>
+                <div class="form-group">
+                    <label for="negre">Negres:</label>
+                    <input type="text" id="negre" name="negre" value="{{ partida.negre|default:'' }}">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="resultat">Resultat:</label>
+                        <select id="resultat" name="resultat">
+                            <option value="*" {% if partida.resultat == '*' %}selected{% endif %}>En joc</option>
+                            <option value="1-0" {% if partida.resultat == '1-0' %}selected{% endif %}>1-0</option>
+                            <option value="0-1" {% if partida.resultat == '0-1' %}selected{% endif %}>0-1</option>
+                            <option value="1/2-1/2" {% if partida.resultat == '1/2-1/2' %}selected{% endif %}>Taules</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="data_partida">Data:</label>
+                        <!-- Format HTML5 YYYY-MM-DD. Si venim de PGN pot ser variable, ho netejem al value -->
+                        <input type="date" id="data_partida" name="data_partida" 
+                               value="{{ partida.data_partida|slice:':10'|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="esdeveniment">Torneig:</label>
+                    <input type="text" id="esdeveniment" name="esdeveniment" value="{{ partida.esdeveniment|default:'' }}">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="lloc">Lloc:</label>
+                        <input type="text" id="lloc" name="lloc" value="{{ partida.lloc|default:'' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="ronda">Ronda:</label>
+                        <input type="text" id="ronda" name="ronda" value="{{ partida.ronda|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="visibilitat">Visibilitat:</label>
+                    <select id="visibilitat" name="visibilitat">
+                        <option value="PUB" {% if partida.visibilitat == 'PUB' %}selected{% endif %}>Pública</option>
+                        <option value="CLB" {% if partida.visibilitat == 'CLB' %}selected{% endif %}>Club</option>
+                        <option value="PRI" {% if partida.visibilitat == 'PRI' %}selected{% endif %}>Privada</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-nav" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 20px;">
+                    Guardar Canvis
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Scripts -->
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
+    <script src="{% static 'js/chess.min.js' %}"></script>
+    <script src="{% static 'js/chessboard-1.0.0.min.js' %}"></script>
+
+        <script>
+        var mainGame = new Chess(); 
+        
+        // --- CARREGA INICIAL ---
+        {% if partida and partida.pgn_text %}
+            var existingPgn = "{{ partida.pgn_text|escapejs }}";
+            if (existingPgn) {
+                mainGame.load_pgn(existingPgn);
+            }
+        {% endif %}
+
+        var moveList = mainGame.history(); 
+        var currentMove = moveList.length; 
+        
+        // Configuració del Tauler
+        var board = Chessboard('board', {
+            position: mainGame.fen(), 
+            pieceTheme: function(piece) {
+                return "{% static 'img/chesspieces/wikipedia/' %}" + piece + '.png';
+            },
+            draggable: true,
+            onDrop: handleMove,
+            // ARREGLAT: onSnapEnd ara calcula la posició correcta de la jugada ACTUAL
+            onSnapEnd: function() {
+                updateBoard(); 
+            }
+        });
+
+        // --- FUNCIÓ CLAU: MOURE'S PER LA PARTIDA ---
+        function updateBoard() {
+            // 1. Reconstruïm la posició fins a 'currentMove'
+            var tempGame = new Chess();
+            for (var i = 0; i < currentMove; i++) {
+                tempGame.move(moveList[i]);
+            }
+            
+            // 2. Actualitzem el tauler visual
+            board.position(tempGame.fen());
+
+            // 3. Actualitzem el text dels moviments
+            updateMoveList();
+        }
+
+        // --- FUNCIÓ PER ACTUALITZAR TEXT PGN ---
+        function updateMoveList() {
+            var tempGame = new Chess();
+            for(var i=0; i<moveList.length; i++) {
+                tempGame.move(moveList[i]);
+            }
+            $('#id_pgn_text').val(tempGame.pgn());
+
+            var pgnHtml = '';
+            for (var i = 0; i < moveList.length; i++) {
+                if (i % 2 === 0) {
+                    var moveNum = (i / 2) + 1;
+                    pgnHtml += moveNum + '. ';
+                }
+                pgnHtml += moveList[i] + ' ';
+            }
+            $('#move-list-editor').text(pgnHtml);
+        }
+
+        // --- GESTIONAR NOVA JUGADA (DRAG & DROP) ---
+        function handleMove(source, target) {
+            var tempGame = new Chess();
+            for (var i = 0; i < currentMove; i++) {
+                tempGame.move(moveList[i]);
+            }
+
+            var move = tempGame.move({
+                from: source,
+                to: target,
+                promotion: 'q' 
+            });
+
+            if (move === null) return 'snapback'; 
+
+            if (currentMove < moveList.length) {
+                var confirmar = confirm("Aquesta jugada sobreescriurà la resta. Vols continuar?");
+                if (!confirmar) {
+                    return 'snapback'; 
+                }
+                moveList = moveList.slice(0, currentMove);
+            }
+
+            // Afegim la jugada a la llista
+            moveList.push(move.san);
+            currentMove = moveList.length;
+            
+            // NOTA: NO cridem updateBoard() aquí per no interferir amb l'animació.
+            // onSnapEnd() s'encarregarà d'actualitzar el tauler visualment.
+            
+            // SÍ actualitzem el text perquè l'usuari vegi el canvi immediatament
+            updateMoveList(); 
+        }
+
+        // --- BOTONS DE NAVEGACIÓ ---
+        $('#btnStart').on('click', function() {
+            currentMove = 0;
+            updateBoard();
+        });
+
+        $('#btnEnd').on('click', function() {
+            currentMove = moveList.length;
+            updateBoard();
+        });
+
+        $('#btnPrev').on('click', function() {
+            if (currentMove > 0) {
+                currentMove--;
+                updateBoard();
+            }
+        });
+
+        $('#btnNext').on('click', function() {
+            if (currentMove < moveList.length) {
+                currentMove++;
+                updateBoard();
+            }
+        });
+
+        // Inicialització
+        updateMoveList();
+
+        // --- NAVAGACIÓ AMB FLETXES DEL TECLAT ---
+        $(document).on('keydown', function(e) {
+            // Si l'usuari està escrivint en un camp de text (INPUT o TEXTAREA), ignorem les fletxes
+            // per permetre moure el cursor del text.
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Fletxa Esquerra: Enrere
+            if (e.key === 'ArrowLeft') {
+                $('#btnPrev').click(); // Simulem un clic al botó
+            }
+            // Fletxa Dreta: Endavant
+            else if (e.key === 'ArrowRight') {
+                $('#btnNext').click();
+            }
+        });
+        
+    </script>
+{% endblock %}

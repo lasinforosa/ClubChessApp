@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Club Escacs{% block title %}{% endblock %}</title>
+    <style>
+        body { font-family: sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; }
+        /* Estil per a la barra de navegació */
+        nav { background-color: #333; padding: 10px 20px; color: white; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 5px; }
+        nav a { color: white; margin-right: 15px; text-decoration: none; }
+        nav a:hover { text-decoration: underline; }
+        .nav-user { font-style: italic; }
+        .nav-auth-links { margin-left: auto; }
+        /* Formulari de logout en línia */
+        .logout-form { display: inline; }
+        .logout-btn { background: none; border: none; color: white; cursor: pointer; text-decoration: underline; font-family: inherit; font-size: inherit; padding: 0; margin-left: 15px; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <div>
+            <a href="{% url 'llista_partides' %}">Inici</a>
+            <!-- Només mostrarem "Pujar Partida" si l'usuari està loguejat -->
+            {% if user.is_authenticated %}
+                <a href="{% url 'pujar_partida' %}">Pujar Partida</a>
+                <a href="{% url 'nova_partida' %}">Nova Partida</a>
+                <a href="{% url 'importar_pgn' %}">Importar PGN</a>
+            {% endif %}
+        </div>
+
+        <div class="nav-auth-links">
+            {% if user.is_authenticated %}
+                <span class="nav-user">Hola, {{ user.username }}</span>
+                
+                <!-- Botó de Sortir (Logout) -->
+                <form action="{% url 'logout' %}" method="post" class="logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="logout-btn">Sortir</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}">Entrar</a>
+                <a href="{% url 'registre' %}">Registrar-se</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+</body>
+</html>

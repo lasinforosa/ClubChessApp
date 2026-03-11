@@ -1,0 +1,13 @@
+{% extends "games/base.html" %}
+
+{% block content %}
+    <h2>Editar Partida</h2>
+    <p>Modifica les dades o enganxa un nou PGN per corregir la partida.</p>
+    
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" style="padding: 10px 20px;">Guardar Canvis</button>
+        <a href="{% url 'detall_partida' partida.id %}" style="margin-left: 10px;">Cancel·lar</a>
+    </form>
+{% endblock %}

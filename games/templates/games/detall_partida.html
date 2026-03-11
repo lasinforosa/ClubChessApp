@@ -1,0 +1,476 @@
+{% extends "games/base.html" %}
+{% load static %}
+
+{% block extra_head %}
+    <link rel="stylesheet" href="{% static 'css/chessboard-1.0.0.min.css' %}">
+    <style>
+        /* Layout */
+        .game-info { margin-bottom: 20px; background: #f4f4f4; padding: 15px; border-radius: 5px; border-left: 5px solid #333; }
+        .game-info h2 { margin-top: 0; }
+        .game-container { display: flex; flex-wrap: wrap; gap: 30px; align-items: flex-start; }
+        .board-column { flex: 0 0 400px; }
+        .pgn-column { flex: 1; min-width: 300px; }
+
+        /* PGN Box */
+        #pgn-container { width: 100%; height: 400px; overflow-y: auto; border: 1px solid #ccc; background-color: #fff; padding: 15px; box-sizing: border-box; font-family: 'Courier New', Courier, monospace; font-size: 14px; line-height: 1.6; }
+        .move-node { cursor: pointer; padding: 2px 4px; border-radius: 3px; }
+        .move-node:hover { background-color: #e0e0e0; }
+        .move-node.active { background-color: #ffffcc; font-weight: bold; border: 1px solid #ccc; }
+        .move-number { color: #888; font-weight: bold; margin-right: 2px; }
+
+        /* Panell d'anàlisi */
+        #engine-output {
+            background: #222;
+            color: #0f0; /* Estil terminal verd */
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            min-height: 100px;
+            font-size: 14px;
+        }
+        #engine-status { color: #aaa; margin-bottom: 10px; font-size: 12px; }
+        #engine-eval { font-size: 24px; font-weight: bold; color: #fff; margin-bottom: 5px; }
+        #engine-pv { word-wrap: break-word; }
+        .btn-engine { padding: 8px 15px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 3px; margin-right: 5px;}
+        .btn-engine.stop { background: #dc3545; }
+
+        /* Buttons */
+        .btn-nav { padding: 8px 15px; margin-right: 5px; cursor: pointer; background: #333; color: white; border: none; border-radius: 3px; }
+        .btn-nav:hover { background: #555; }
+        #move-counter { font-weight: bold; margin-left: 10px; font-size: 1em; color: #555; }
+
+        /* Comments */
+        .comment-section { margin-top: 40px; width: 100%; }
+        .comment-group { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .comment-group-header { background: #f0f0f0; padding: 8px 15px; font-weight: bold; border-bottom: 1px solid #ddd; cursor: pointer; }
+        .comment-group-header:hover { background: #e0e0e0; }
+        
+        .comment-box { background: #fff; padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: flex-start; }
+        .comment-content { flex-grow: 1; }
+        .comment-text { white-space: pre-wrap; }
+        .comment-meta { font-size: 0.85em; color: #666; margin-bottom: 5px; }
+        
+        /* Edit Styles */
+        .btn-action { color: #0066cc; text-decoration: none; font-size: 0.85em; margin-left: 10px; cursor: pointer; }
+        .btn-delete { color: red; }
+        .edit-textarea { width: 100%; height: 60px; margin-bottom: 5px; }
+        .btn-save-edit { padding: 5px 10px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 3px; }
+        .btn-cancel-edit { padding: 5px 10px; cursor: pointer; background: #ccc; color: black; border: none; border-radius: 3px; margin-left: 5px;}
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="game-info">
+        <h2>{{ partida.blanc }} vs {{ partida.negre }}</h2>
+        <p>
+            <strong>Torneig:</strong> {{ partida.esdeveniment }} | 
+            <strong>Lloc:</strong> {{ partida.lloc }} | 
+            <strong>Data:</strong> {{ partida.data_partida }} | 
+            <strong>Ronda:</strong> {{ partida.ronda }} |
+            <strong>Resultat:</strong> {{ partida.resultat }}
+        </p>
+    </div>
+    
+    {{ partida.pgn_text|json_script:"pgn-data-json" }}
+    <!-- Passar CSRF token a JS per a l'edició AJAX -->
+    {% csrf_token %}
+
+    <div class="game-container">
+        <!-- TAULER -->
+        <div class="board-column">
+            <div id="board" style="width: 400px"></div>
+            <div style="margin-top: 10px; display: flex; align-items: center;">
+                <button id="btnStart" class="btn-nav">Inici</button>
+                <button id="btnPrev" class="btn-nav"><</button>
+                <button id="btnNext" class="btn-nav">></button>
+                <button id="btnEnd" class="btn-nav">Final</button>
+                <span id="move-counter">Moviment: -</span>
+            </div>
+        </div>
+
+        <!-- PGN -->
+        <div class="pgn-column">
+            <h3>Partida (Clica per moure)</h3>
+            <div id="pgn-container"></div>
+
+            <!-- ... dins de la columna PGN, sota el div id="pgn-container" ... -->
+            <div style="margin-top: 20px;">
+                <h3>Anàlisi amb Stockfish</h3>
+                <div style="margin-bottom: 10px;">
+                    <button id="btnStartEngine" class="btn-engine">Analitzar Posició</button>
+                    <button id="btnStopEngine" class="btn-engine stop" style="display:none;">Aturar</button>
+                </div>
+                <div id="engine-output">
+                    <div id="engine-status">Motor aturat. Prem "Analitzar".</div>
+                    <div id="engine-eval"></div>
+                    <div id="engine-pv"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- COMENTARIS -->
+    <div class="comment-section">
+        <h3>Comentaris ({{ comentaris.count }})</h3>
+        
+        {% regroup comentaris by jugada_num as movelist %}
+        
+        {% for move in movelist %}
+            <div class="comment-group">
+                <!-- Enllaç clicable per anar a la jugada -->
+                <div class="comment-group-header" onclick="goToMove({{ move.grouper }});">
+                    {% if move.grouper %}
+                        <a href="javascript:void(0);">Moviment {{ move.grouper }}</a>
+                    {% else %}
+                        General
+                    {% endif %}
+                </div>
+                {% for comentari in move.list %}
+                    <div class="comment-box" id="comment-{{ comentari.id }}">
+                        <div class="comment-content">
+                            <div class="comment-meta">
+                                <strong>{{ comentari.autor.username }}</strong> - {{ comentari.data_creacio|date:"d/m/Y H:i" }}
+                            </div>
+                            
+                            <!-- Vista normal del text -->
+                            <div class="comment-text" id="text-display-{{ comentari.id }}">
+                                {{ comentari.text|linebreaksbr }}
+                            </div>
+
+                            <!-- Formulari d'edició (ocult per defecte) -->
+                            <div class="edit-form" id="edit-form-{{ comentari.id }}" style="display:none;">
+                                <textarea class="edit-textarea" id="edit-input-{{ comentari.id }}">{{ comentari.text }}</textarea>
+                                <button class="btn-save-edit" onclick="saveEdit({{ comentari.id }})">Guardar</button>
+                                <button class="btn-cancel-edit" onclick="cancelEdit({{ comentari.id }})">Cancel·lar</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Accions -->
+                        <div style="min-width: 80px; text-align: right;">
+                            {% if user == comentari.autor %}
+                                <span class="btn-action" onclick="startEdit({{ comentari.id }})">Editar</span>
+                                <a href="{% url 'esborrar_comentari' comentari.id %}" class="btn-action btn-delete" onclick="return confirm('Segur?');">Esborrar</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% empty %}
+            <p>Encara no hi ha comentaris.</p>
+        {% endfor %}
+
+        {% if user.is_authenticated %}
+            <hr style="margin: 30px 0;">
+            <h4>Deixa un comentari</h4>
+            <form method="post">
+                {% csrf_token %}
+                <p>
+                    <label for="id_jugada_num">Moviment nº (automàtic):</label><br>
+                    <input type="number" name="jugada_num" id="id_jugada_num" style="width: 80px;">
+                </p>
+                <p>
+                    <label for="id_text">Comentari:</label><br>
+                    <textarea name="text" id="id_text" rows="3" style="width: 100%;" required></textarea>
+                </p>
+                <button type="submit" name="btn_comentari" class="btn-nav">Enviar</button>
+            </form>
+        {% else %}
+            <p><a href="{% url 'login' %}">Inicia sessió</a> per deixar comentaris.</p>
+        {% endif %}
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
+    <script src="{% static 'js/chess.min.js' %}"></script>
+    <script src="{% static 'js/chessboard-1.0.0.min.js' %}"></script>
+
+    <script>
+        // --- CONFIGURACIÓ AJAX PER CSRF ---
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        // --- MOTOR D'ESCACS ---
+        var pgnElement = document.getElementById('pgn-data-json');
+        var pgnText = pgnElement ? JSON.parse(pgnElement.textContent) : "";
+        
+        var game = new Chess();
+        var board = Chessboard('board', {
+            position: 'start',
+            pieceTheme: function(piece) { return "{% static 'img/chesspieces/wikipedia/' %}" + piece + '.png'; },
+            moveSpeed: 200
+        });
+
+        var jugades = [];
+        var currentMove = 0;
+
+        if (pgnText && game.load_pgn(pgnText.trim())) {
+            jugades = game.history();
+            currentMove = jugades.length;
+            generateMoveList();
+            updateBoard();
+        } else {
+            $('#pgn-container').text("Error carregant PGN.");
+        }
+
+        function generateMoveList() {
+            var container = $('#pgn-container');
+            container.empty();
+            for (var i = 0; i < jugades.length; i++) {
+                var move = jugades[i];
+                if (i % 2 === 0) {
+                    var moveNum = (i / 2) + 1;
+                    container.append('<span class="move-number">' + moveNum + '.</span> ');
+                }
+                var $moveSpan = $('<span>', {
+                    class: 'move-node',
+                    text: move + ' ',
+                    'data-ply': i + 1
+                });
+                $moveSpan.on('click', function() {
+                    currentMove = $(this).data('ply');
+                    updateBoard();
+                });
+                container.append($moveSpan);
+            }
+        }
+
+        function updateBoard() {
+            var tempGame = new Chess();
+            for (var i = 0; i < currentMove; i++) {
+                tempGame.move(jugades[i]);
+            }
+            board.position(tempGame.fen());
+
+            if (currentMove === 0) {
+                $('#move-counter').text("Posició Inicial");
+                $('#id_jugada_num').val(''); 
+            } else {
+                $('#move-counter').text("Moviment " + currentMove + " de " + jugades.length);
+                $('#id_jugada_num').val(currentMove);
+            }
+
+            $('.move-node').removeClass('active');
+            $('.move-node[data-ply="' + currentMove + '"]').addClass('active');
+            
+            var activeNode = $('.move-node.active')[0];
+            if (activeNode) activeNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Funció global per anar a una jugada (cridada des dels comentaris)
+        window.goToMove = function(ply) {
+            if (ply) {
+                currentMove = ply;
+                updateBoard();
+            }
+        };
+
+        $('#btnStart').on('click', function() { currentMove = 0; updateBoard(); });
+        $('#btnEnd').on('click', function() { currentMove = jugades.length; updateBoard(); });
+        $('#btnPrev').on('click', function() { if (currentMove > 0) { currentMove--; updateBoard(); } });
+        $('#btnNext').on('click', function() { if (currentMove < jugades.length) { currentMove++; updateBoard(); } });
+
+
+        // --- EDICIÓ DE COMENTARIS (INLINE) ---
+        
+        window.startEdit = function(id) {
+            // Mostrar formulari, amagar text
+            $('#text-display-' + id).hide();
+            $('#edit-form-' + id).show();
+        };
+
+        window.cancelEdit = function(id) {
+            // Tornar enrere
+            $('#edit-form-' + id).hide();
+            $('#text-display-' + id).show();
+        };
+
+        window.saveEdit = function(id) {
+            var newText = $('#edit-input-' + id).val();
+            var url = "/comentari/" + id + "/editar/"; // Hardcoded URL per simplicitat, o usar dades
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrftoken
+                },
+                body: 'text=' + encodeURIComponent(newText)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Actualitzar text a la pantalla
+                    $('#text-display-' + id).text(data.text);
+                    cancelEdit(id); // Amagar formulari
+                } else {
+                    alert('Error al guardar: ' + data.error);
+                }
+            });
+        };
+
+        // --- NAVAGACIÓ AMB FLETXES (AFEGIR AL FINAL DE L'SCRIPT DE DETALL_PARTIDA) ---
+        $(document).on('keydown', function(e) {
+            // Permetre escriure als camps de comentaris o edició sense que salti el tauler
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (e.key === 'ArrowLeft') {
+                $('#btnPrev').click();
+            } else if (e.key === 'ArrowRight') {
+                $('#btnNext').click();
+            }
+        });
+
+        
+        // --- STOCKFISH ENGINE LOGIC ---
+                // --- STOCKFISH ENGINE LOGIC (NUMERACIÓ CORREGIDA) ---
+        var stockfish = null;
+        var engineRunning = false;
+
+        function initStockfish() {
+            if (stockfish) return;
+            stockfish = new Worker("{% static 'js/stockfish.js' %}");
+            
+            stockfish.onmessage = function(event) {
+                var line = event.data;
+                if (line.includes(' score ') && line.includes(' pv ')) {
+                    parseEngineInfo(line);
+                }
+            };
+            stockfish.postMessage("uci");
+        }
+
+        function parseEngineInfo(line) {
+            // 1. Profunditat
+            var depthMatch = line.match(/depth (\d+)/);
+            var depth = depthMatch ? depthMatch[1] : "?";
+
+            // 2. Avaluació
+            var scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+            var scoreText = "?";
+            
+            if (scoreMatch) {
+                var type = scoreMatch[1];
+                var value = parseInt(scoreMatch[2]);
+                var isWhiteTurn = (currentMove % 2 === 0);
+
+                if (type === 'cp') {
+                    var displayValue = isWhiteTurn ? value : -value;
+                    scoreText = (displayValue / 100).toFixed(2);
+                    if (displayValue > 0) scoreText = "+" + scoreText;
+                } else if (type === 'mate') {
+                    var displayMate = isWhiteTurn ? value : -value;
+                    scoreText = "Mat en " + Math.abs(displayMate);
+                }
+            }
+
+            // 3. Millor Línia (PV)
+            var pvMatch = line.match(/pv (.+)/);
+            var pvText = "";
+            
+            if (pvMatch) {
+                var tokens = pvMatch[1].split(' ');
+                var uciMoves = [];
+                var uciRegex = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+
+                for (var i = 0; i < tokens.length; i++) {
+                    if (uciRegex.test(tokens[i])) uciMoves.push(tokens[i]);
+                }
+                
+                // Creem tauler amb la posició ACTUAL
+                var tempGame = new Chess();
+                for (var i = 0; i < currentMove; i++) {
+                    tempGame.move(jugades[i]);
+                }
+                
+                // Bucle de jugades
+                for (var i = 0; i < uciMoves.length; i++) {
+                    var uci = uciMoves[i];
+                    var from = uci.substring(0, 2);
+                    var to = uci.substring(2, 4);
+                    var promotion = uci.length > 4 ? uci[4] : undefined;
+
+                    // MIREM EL TORN ABANS DE FER LA JUGADA
+                    var turnBeforeMove = tempGame.turn();
+                    var historyCount = tempGame.history().length;
+                    
+                    var moveObj = tempGame.move({ from: from, to: to, promotion: promotion });
+
+                    if (moveObj) {
+                        if (turnBeforeMove === 'w') {
+                            // Torn de blanques: Calculem número (ex: 1. e4)
+                            // La fórmula (history / 2) + 1 ens dóna el número de jugada actual
+                            var moveNum = Math.floor(historyCount / 2) + 1;
+                            pvText += moveNum + ". " + moveObj.san + " ";
+                        } else {
+                            // Torn de negres
+                            if (i === 0) {
+                                // Si és la primera jugada que analisem (i és negra), cal posar número amb punts
+                                // Ex: 11... e5
+                                var moveNum = Math.floor(historyCount / 2) + 1;
+                                pvText += moveNum + "... " + moveObj.san + " ";
+                            } else {
+                                // Si no és la primera, no cal repetir número (ex: e5)
+                                pvText += moveObj.san + " ";
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Actualitzar UI
+            $("#engine-status").text("Profunditat: " + depth);
+            $("#engine-eval").text("Avaluació: " + scoreText);
+            $("#engine-pv").text("Millor línia: " + pvText);
+        }
+
+        function startAnalysis() {
+            if (!stockfish) return;
+            var tempGame = new Chess();
+            for (var i = 0; i < currentMove; i++) {
+                tempGame.move(jugades[i]);
+            }
+            stockfish.postMessage("stop"); 
+            stockfish.postMessage("position fen " + tempGame.fen());
+            stockfish.postMessage("go depth 18");
+        }
+
+        // Botons
+        $('#btnStartEngine').on('click', function() {
+            initStockfish();
+            engineRunning = true;
+            $('#btnStartEngine').hide();
+            $('#btnStopEngine').show();
+            startAnalysis();
+        });
+
+        $('#btnStopEngine').on('click', function() {
+            if (stockfish) stockfish.postMessage("stop");
+            engineRunning = false;
+            $('#btnStartEngine').show();
+            $('#btnStopEngine').hide();
+        });
+
+        // Connexió amb navegació
+        var originalUpdateBoard = updateBoard;
+        updateBoard = function() {
+            originalUpdateBoard();
+            if (engineRunning) startAnalysis();
+        };
+       
+    </script>
+{% endblock %}

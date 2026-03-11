@@ -1,0 +1,41 @@
+{% extends "games/base.html" %}
+
+{% block content %}
+    <h2>Registre de Jugador</h2>
+    <p>Si ets federat, introdueix el teu nom tal com consta a la Federació Catalana.</p>
+
+    <form method="post">
+        {% csrf_token %}
+        
+        <p>
+            <label>Nom d'usuari:</label><br>
+            {{ form.username }}
+        </p>
+        <p>
+            <label>Contrasenya:</label><br>
+            {{ form.password }}
+        </p>
+        <p>
+            <label>Repeteix contrasenya:</label><br>
+            {{ form.password2 }}
+        </p>
+        
+        <hr>
+        <h3>Dades del Jugador</h3>
+        
+        <p>
+            <label>Nom complet (Federació):</label><br>
+            {{ form.nom_complet }}
+        </p>
+        <p>
+            <label>Club:</label><br>
+            {{ form.club }}
+        </p>
+        <p>
+            <label>ID FCAT (opcional):</label><br>
+            {{ form.fcat_id }}
+        </p>
+
+        <button type="submit">Registrar-me</button>
+    </form>
+{% endblock %}

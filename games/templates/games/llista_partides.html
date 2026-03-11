@@ -1,0 +1,87 @@
+{% extends "games/base.html" %}
+
+{% block content %}
+    <h1>Llista de Partides</h1>
+
+    <!-- FORMULARI DE CERCA -->
+    <form method="get" style="margin-bottom: 20px;">
+        <input type="text" name="q" value="{{ query }}" placeholder="Cerca jugadors o torneig...">
+        <button type="submit">Cercar</button>
+        {% if query %}
+            <a href="{% url 'llista_partides' %}">Netejar</a>
+        {% endif %}
+    </form>
+
+    {% if page_obj %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #333; color: white;">
+                    <th style="padding: 10px; width: 50px;">Estat</th>
+                    <th style="padding: 10px;">Data</th>
+                    <th style="padding: 10px;">Torneig</th>
+                    <th style="padding: 10px;">Ronda</th> 
+                    <th style="padding: 10px;">Blanques</th>
+                    <th style="padding: 10px;">Negres</th>
+                    <th style="padding: 10px;">Res.</th>
+                    <th style="padding: 10px;">Accions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for partida in page_obj %}
+                    <tr style="border-bottom: 1px solid #ddd;">
+                        <!-- Columna Estat -->
+                        <td style="padding: 10px; text-align: center;">
+                            {% if partida.visibilitat == partida.PUBLICA %}
+                                <span title="Pública">🌍</span>
+                            {% elif partida.visibilitat == partida.CLUB %}
+                                <span title="Club">🏠</span>
+                            {% elif partida.visibilitat == partida.PRIVADA %}
+                                <span title="Privada">🔒</span>
+                            {% endif %}
+                        </td>
+                        
+                        <td style="padding: 10px;">{{ partida.data_partida }}</td>
+                        <td style="padding: 10px;">{{ partida.esdeveniment }}</td>
+                        
+                        <td style="padding: 10px; text-align: center;">
+                            {{ partida.ronda|default:"-" }}
+                        </td>
+
+                        <td style="padding: 10px;">{{ partida.blanc }}</td>
+                        <td style="padding: 10px;">{{ partida.negre }}</td>
+                        <td style="padding: 10px; font-weight: bold;">{{ partida.resultat }}</td>
+                        
+                        <td style="padding: 10px;">
+                            <a href="{% url 'detall_partida' partida.id %}" style="color: blue;">Veure</a>
+                            
+                            <!-- Només mostrem Editar/Esborrar si ets el propietari O si ets superusuari (admin) -->
+                            {% if user == partida.pujada_per or user.is_superuser %}
+                                | <a href="{% url 'editar_partida' partida.id %}" style="color: orange;">Editar</a>
+                                | <a href="{% url 'esborrar_partida' partida.id %}" style="color: red;">Esborrar</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- PAGINACIÓ -->
+        <div style="margin-top: 20px; text-align: center;">
+            {% if page_obj.has_previous %}
+                <a href="?page=1{% if query %}&q={{ query }}{% endif %}">Primera</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}">Anterior</a>
+            {% endif %}
+
+            <span>Pàgina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}">Següent</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}{% if query %}&q={{ query }}{% endif %}">Última</a>
+            {% endif %}
+        </div>
+
+    {% else %}
+        <p>No hi ha partides que compleixin els criteris.</p>
+    {% endif %}
+    
+{% endblock %}

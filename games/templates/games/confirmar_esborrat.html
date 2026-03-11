@@ -1,0 +1,13 @@
+{% extends "games/base.html" %}
+
+{% block content %}
+    <h2>Confirmar Esborrat</h2>
+    <p>Estàs segur que vols esborrar la partida <strong>{{ partida.blanc }} vs {{ partida.negre }}</strong>?</p>
+    <p>Aquesta acció no es pot desfer.</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" style="background: red; color: white; padding: 10px;">Sí, Esborrar</button>
+        <a href="{% url 'detall_partida' partida.id %}" style="margin-left: 10px;">Cancel·lar</a>
+    </form>
+{% endblock %}

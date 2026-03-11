@@ -1,0 +1,34 @@
+{% extends "games/base.html" %}
+
+{% block content %}
+    <h2>Pujar una nova partida</h2>
+    <p>Enganxa el PGN de la partida. El sistema detectarà automàticament els jugadors i el resultat.</p>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Mostrem errors globals si n'hi ha -->
+        {% if form.non_field_errors %}
+            <div style="color: red;">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <!-- Camp PGN -->
+        <div style="margin-bottom: 15px;">
+            {{ form.pgn_text.label_tag }}<br>
+            {{ form.pgn_text }}
+            {% if form.pgn_text.errors %}
+                <div style="color: red; font-size: 0.9em;">{{ form.pgn_text.errors }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Camp Visibilitat -->
+        <div style="margin-bottom: 15px;">
+            {{ form.visibilitat.label_tag }}<br>
+            {{ form.visibilitat }}
+        </div>
+
+        <button type="submit" style="padding: 10px 20px; cursor: pointer;">Guardar Partida</button>
+    </form>
+{% endblock %}
